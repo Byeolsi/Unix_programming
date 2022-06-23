@@ -1,0 +1,98 @@
+FILE *popen(const char *command, const char *mode);
+	* mode:
+		- "r", "w"
+	- 함수 내부에서 fork 함수를 실행해 자식 프로세스를 만들고 command 에서 지정한 명령을 exec 함수로 자식이 실행하도록 함.
+
+int pipe(int fildes[2]);
+int p[2];
+pid_t pid;
+char buf[257];
+pipe(p);
+switch (pid = fork()) {
+	case 0:
+		close(p[0]);
+		write(p[1], "Test Message\n", 256);
+		break;
+	default:
+		close(p[1]);
+		read(p[0], buf, 14);
+		wait(NULL); / waitpid(pid, &status, 0);
+
+쓰기전용 파일기술자를 닫았을 때:
+	- 자료를 쓰기 위해 해당 파이프를 개방한 다른 프로세스가 존재하면 OK
+	- 쓰기 프로세스가 더 이상 없으면, 자료를 읽으려는 프로세스를 깨우고 0를 복귀. 파일의 끝에 도달한 것 같은 효과를 발생.
+읽기전용 파일기술자를 닫았을 때:
+	- 자료를 읽기 위해 해당 파이프를 개방한 다른 프로세스가 존재하면 OK
+	- 없으면 쓰기를 기다리는 모든 프로세스는 SIGPIPE 시그널을 받고 -1로 복귀. 오류발생.
+
+int status;
+pid_t pid;
+while (wait(&status) != pid)
+	continue
+printf("Status: %d, %x\n", status, status);
+printf("Child process Exit Status: %d\n", status >. 8);	// 오른쪽으로 8비트 이동해야 종료 상태 값을 알 수 있음.
+
+pid_t waitpid(pid_t pid, int *stat_loc, int options);
+	* options: waitpid 함수의 리턴 조건
+		- 0: Normal.
+		- WCONTINUED: 수행중인 자식 프로세스의 상태값 리턴.
+		- WNOHANG: 상태값을 즉시 리턴받을 수 없어도 이를 호출한 프로세스의 실행을 블록하지 않고 다른 작업을 수행하도록 함. (비동기적)
+		- WNOWAIT: 상태값을 리턴한 프로세스가 대기 상태에 머물 수 있도록 함.
+		- WUNTRACED: 종료되거나 실행을 중단한 자식 프로세스의 상태값을 리턴.
+int status;
+pid_t pid;
+switch (pid = fork()) {
+	case 0:
+		. . .
+	default:
+		while (waitpid(pid, &status, WNOHANG) == 0) { . . . }
+
+fcntl(pfd[0], F_SETFL, O_NONBLOCK);
+switch (nread = read(p[0], buf, MSGSIZE)) {
+	case -1:
+		if (errno == EAGAIN) {
+			printf("(pipe empty)\n");
+			sleep(1);
+			break;
+		}
+	case 0:
+		printf("End of coversation\n");
+		exit(0);
+	default:
+		printf("MSG = %s\n", buf);
+}
+	- 읽은 것이 없으면, 읽은 것이 생길 때까지 block 상태로 대기하는 것이 아니라 바로 에러를 리턴.
+
+int select (int nfds, fd_set *readfs, fd_set *writefs, fd_set *errorfs, struct timeval *timeout);
+void FD_ZERO(fd_set *fdset);	: fdset 가 가리키는 마스크를 초기화.
+void FD_SET(int fd, fd_set *fdset);	: fdset 가 가리키는 마스크 내의 비트, fd 를 1로 설정.
+void FD_ISSET(int fd, fd_set *fdset);	: fdset 가 가리키는 마스크 내의 비트, fd 가 설정되어 있는가?
+void FD_CLR(int fd, fd_set *fdset);	: fdset 가 가리키는 마스크 내의 비트, fd 를 0으로 설정.
+
+int fd1, fd2;
+fd_set readset;
+fd1 = open("file1", O_RDONLY);
+fd2 = open("file2", O_RDONLY);
+FD_ZERO(&readset);
+FD_SET(fd1, &readset);	FD_SET(fd2, &readset);
+switch (select(5, &readset, NULL, NULL, NULL)) { . . . }
+
+<parent>
+fd_set set, master;
+for (i = 0; i < 2; i++) close(p[i][1]);
+FD_ZERO(&master);
+FD_SET(0, &master);
+for (i = 0 ; i < 2; i++) FD_SET(p[i][0], &master);
+while (set = master, select(p[2][0]+1, &set, NULL, NULL, NULL) > 0) {
+	if (FD_ISSET(0, &set)) {
+		printf("From standard input...");
+		read(0, &ch, 1);
+		printf("%c\n", ch);
+	}
+	for (i = 0; i < 3; i++) {
+		if (FD_ISSET(p[i][0], &set)) {
+			read(p[i][0], buf, MSGSIZE);
+			. . .
+		}
+	}
+}

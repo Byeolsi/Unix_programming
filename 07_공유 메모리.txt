@@ -1,0 +1,71 @@
+공유 메모리
+	- 같은 메모리 공간을 두 개 이상의 프로세스가 공유하는 것.
+
+int shmget(key_t key, size_t size, int shmflg);
+	* shmflg: 공유 메모리의 속성을 지정하는 플래그.
+		- IPC_CREAT
+		- IPC_EXCL
+void *shmat(int shmid, const void *shmaddr, int shmflg);
+	* shmflg: 공유 메모리에 대한 읽기/쓰기 권한
+		- 0: 읽기/쓰기 가능.
+		- SHM_RDONLY: 읽기 전용.
+int shmctl(int chmid, int cmd, struct shmid_ds *buf);
+	* cmd: 수행할 제어기능.
+		- IPC_RMID: 공유 메모리 제거.
+		- IPC_SET: 공유 메모리 정보를 세번째 인자(buf)로 지정한 값으로 변경.
+		- IPC_STAT: 현재 공유 메모리의 정보를 buf 에 저장.
+		- SHM_LOCK: 공유 메모리를 잠근다.
+		- SHM_UNLOCK: 공유 메모리의 잠금을 해제한다.
+
+<부모-자식 프로세스>
+char *shmaddr, *shmaddr2;
+int pid;
+// key = ftok(" . . . ", 1);
+shmid = shmget(IPC_PRIVATE, 20, IPC_CREAT | 0644);
+switch (pid = fork()) {
+	case 0:
+		shmaddr = (char *)shmat(shmid, (char *)NULL, 0);
+		for (i = 0; i < 10; i++) shmaddr[i] = 'a' + i;
+		shmdt((char *)shmaddr);
+		break;
+	default:
+		wait(0);
+		shmaddr2 = (char *)shmat(shmid, (char *)NULL, 0);
+		for (i = 0; i < 10; i++) printf("%c ", shmaddr2[i]);
+		shmdt((char *)shmaddr2);
+		shmctl(shmid, IPC_RMID, (struct shmid_ds *)NULL);
+		break;
+}
+
+<Server>
+int shmid;
+void *shmadr;
+char buf[1024];
+sigset_t mask;
+
+shmid = shmget(980, 1024, IPC_CREAT | 0644);
+
+sigfillset(&mask);
+sigdelset(&mask, SIGUSR1);
+sigset(SIGUSR1, handler);
+sigsuspend(&mask);
+
+shmaddr = shmat(shmid, NULL, 0);
+strcpy(buf, shmaddr);
+strcpy(shmaddr, "Have a nice day\n");
+shmdt(shmaddr);
+
+<Client>
+int shmid;
+void *shmaddr;
+char buf[1024];
+
+shmid = shmget(980, 1024, 0);
+shmaddr = shmat(shmid, NULL, 0);
+strcpy(shmaddr, "Hello, I'm talker\n");
+
+kill(atoi(argv[i]), SIGUSR1);
+strcpy(buf, shmaddr);
+printf("%s\n", buf);
+shmdt(shmaddr);
+shmctl(shmid, IPC_RMID, NULL);

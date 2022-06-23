@@ -1,0 +1,47 @@
+이름 없는 파이프와 이름 있는 파이프의 차이점
+	- 이름 없는 파이프는 부모-자식 프로세스간의 통신을 위해서 사용.
+	- 이름 있는 파이프는 부모-자식간이 아닌 독립적인 프로세스간의 통신을 위해서 사용.
+
+int mknod(const char *path, mode_t mode, dev_t dev);
+	* mode: 생성할 특수파일의 종류.
+		- S_IFIFO: FIFO 특수파일
+		- S_IFCHAR: 문자장치 특수파일
+		- S_IFDIR: 디렉토리
+		- S_IFBLK: 블록장치 특수파일
+		- S_IFREG: 일반파일
+int mkfifo(const char *path, mode_t mode);
+<Server>
+int pd;
+mknod("TEST_FIFO", S_IFIFO | 0666, 0); / mkfifo("TEST_FIFO", 0666);
+pd = open("TEST_FIFO", O_WRONLY);
+close(pd);
+<Client>
+int pd;
+char buf[80];
+pd = open("TEST_FIFO", O_RDONLY);
+while ((n = read(pd, buf, 80)) > 0)	write(1, buf, n);
+
+레코드 록킹(advisory locking)
+	- 읽기 록: 다른 프로세스들이 쓰기 록을 적용하지 못하게 함. 여러 프로세스들이 같은 구역에 동시에 읽기 록을 할 수 있음.
+	- 쓰기 록: 다른 프로세스들이 그 구역에 읽거나 쓰기 록을 할 수 없도록 함. 파일의 한 구역에는 한 순간에 하나의 쓰기 록만이 존재.
+int fcntl(int fildes, int cmd, struct flock *ldata);
+	* cmd:
+		- F_GETLK: ldata 를 통해 전달된 록 정보를 획득.
+		- F_SETLK: 파일에 록을 적용하고, 불가능하면 즉 -1로 돌아옴.
+		- F_SETLKW: 파일에 록을 적용하고, 이것이 만약 다른 프로세스가 소유하고 있으면 수면. (lock 이 풀릴 때까지 기다림.)
+	* struct flock:
+		- l_type:	F_RDLCK: 읽기 록 적용.
+			F_WRLCK: 쓰기 록 적용.
+			F_UNLCK: 록 제거.
+struct flock my_lock;
+my_lock.l_type = F_WRLCK;
+my_lock.l_whence = SEEK_CUR;
+my_lock.l_start = 0;
+my_lock.l_len = 512;
+fcntl(fd, F_SETLKW, &my_lock);
+if (fcntl(fd, F_SETLK, &my_lock) == -1) {
+	if (errno == EACCES || errno == EAGAIN) {
+		fcntl(fd, F_GETLK, &b_lock);
+		printf("record locked by %d\n", b_lock.l_pid);
+	}
+}

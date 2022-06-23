@@ -1,0 +1,90 @@
+시그널
+	- 프로세스에 뭔가 발생했음을 알리는 간단한 메시지를 보내는 것.
+발생사유
+	- 예외적인 상황이 일어나는 경우
+	- kill 함수와 같은 함수를 통해 다른 프로세스에 시그널을 보내는 경우
+	- Ctrl+C 와 같은 인터럽트 키를 입력한 경우
+시그널 처리방법
+	- 대부분의 기본동작은 프로세스 종료.
+	- 시그널을 무시.
+	- 시그널을 받으면 해당하는 시그널 핸들러를 호출.
+	- 시그널을 블록처리.
+시그널 핸들러
+	- 시그널을 받았을 때 이를 처리하기 위해 지정된 함수.
+
+void (*signal(int sig, void (*disp)(int)))(int);
+	* disp: sig 로 지정한 시그널을 받았을 때 처리할 방법
+		- 시그널 핸들러 함수명.
+		- SIG_IGN: 시그널을 무시하도록 지정.
+		- SIG_DFL: 기본 처리 방법으로 처리하도록 지정.
+void handler(int signo) { . . . }
+void (*hand)(int);
+hand = signal(SIGINT, handler);
+if (hand == SIG_ERR) { perror("signal"); exit(1); }
+
+void handler(int signo) { . . . }
+void (*sigset(int sig, void (*disp)(int)))(int);
+sigset(SIGINT, handler);
+
+sigset_t st;
+int sigemptyset(sigset_t *set);
+int sigaddset(sigset_t *set, int signo);
+sigemptyset(&st);
+sigaddset(&st, SIGINT);
+
+struct sigaction act;
+	* sa_flags: 시그널 전달 방법을 수정할 플래그.
+		- SA_SIGINFO
+		- SA_SIGINFO가 설정되어 있지 않으면 sa_handler 에 시그널 처리동작 지정.
+		- SA_SIGINFO가 설정되어 있으면 sa_sigaction 멤버 사용.
+	* sa_flags 에 지정할 수 있는 값
+		- SA_RESETHAND: 시그널 핸들러가 한 번 호출된 후에 시그널 처리 방법이 기본처리 방법으로 재설정.
+		- SA_SIGINFO
+	* sa_mask: 시그널 핸들러가 수행되는 동안 블록될 시그널을 지정한 시그널 집합.
+
+int sigaction(int sig, const struct sigaction *restrict act, struct sigaction *restrict oact);
+struct sigaction act;
+sigemptyset(&act.sa_mask);
+sigaddset(&act.sa_mask, SIGQUIT);
+act.sa_flags = 0;
+act.sa_handler = handler;
+sigaction(SIGINT, &act, (struct sigaction *)NULL)
+
+void handler(int signo, siginfo_t *sf, ucontext_t *uc)
+{
+	psiginfo(sf, "Received Signal: ");
+}
+act.sa_flags = SA_SIGINFO;
+act.sa_sigaction = (void (*)(int, siginfo_t *, void *))handler;
+sigemptyset(&act.sa_mask);
+sigaction(SIGUSR1, &act, (struct sigaction *)NULL)
+
+getitimer(int which, struct itimerval *value);
+setitimer(int which, const struct itimerval *value, struct itimerval *ovalue);
+	* 타이머의 종류
+		- ITIMER_REAL: 실제 시간 사용. SIGALRM 시그널 발생.
+		- ITIMER_VIRTUAL: 프로세스의 가상 시간 사용. SIGVTALRM 시그널 발생.
+		- ITIMER_PROF: 실행중인 시간과 프로세스의 가상 시간을 모두 사용. SIGPROF 시그널 발생.
+		- ITIMER_REALPROF: 실제 시간 사용. 멀티스레드 프로그램의 실제 실행시간 측정 시 사용. SIGPROF 시그널 발생.
+
+struct itimerval it;
+sigset(SIGALRM, handler);
+it.it_value.tv_sec = 3;
+it.it_value.tv_usec = 0;
+it.it_interval.tv_sec = 2;
+it.it_interval.tv_usec = 0;
+getitimer(ITIMER_REAL, &it);
+setitimer(ITIMER_REAL, &it, (struct itimerval *)NULL);
+
+sigprocmask(int how, const sigset_t *restrict set, sigset_t *restrict oset);
+	* how 타입
+		- SIG_BLOCK: set 에 지정한 시그널 집합을 시그널 마스크에 추가.
+		- SIG_UNBLOCK: set 에 지정한 시그널 집합을 시그널 마스크에서 제거.
+		- SIG_SETMASK: set 에 지정한 시그널 집합으로 현재 시그널 마스크 대체.
+sigset_t new;
+sigemptyset(&new);
+sigaddset(&new, SIGINT);
+sigaddset(&new, SIGQUIT);
+sigprocmask(SIG_BLOCK, &new, (sigset_t *)NULL);
+sigprocmask(SIG_UNBLOCK, &new, (sigset_t *)NULL);
+// malloc 하면 free 해주는 것처럼, 블록하고 언블록해줘야 함.

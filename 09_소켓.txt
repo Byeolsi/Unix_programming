@@ -1,0 +1,215 @@
+소켓
+
+TCP와 UDP
+TCP		UDP
+연결지향형	비연결형			// 사전 연결
+신뢰성 보장	신뢰성을 보장하지 않음.	// reliablilty
+흐름 제어 기능	흐름 제어 기능 없음.	// flow-control
+순서 보장	순서를 보장하지 않음.	// sequence
+
+struct hostent *gethostbyaddr(const char *addr, int len, int type);
+	* type:
+		- AF_UNIX: 호스트 내부 통신
+		- AF_INET: 인터네트워크 통신: UDP, TCP 등
+struct servent *getservbyport(int port, const char *proto);
+	* proto:
+		- tcp, udp, NULL
+struct servent *port;
+port = getservbyport(htons(21), "tcp");
+
+정수를 저장하는 방식: 빅엔디안, 리틀엔디안
+	- 빅엔디안: 메모리의 낮은 주소에 정수의 첫 바이트를 위치.
+	- 리틀엔디안: 메모리의 높은 주소에 정수의 첫 바이트를 위치.
+바이트 순서
+	- 호스트 바이트 순서(HBO): 시스템에서 사용하는 바이트 순서
+	- 네트워크 바이트 순서(NBO): 네트워크에서 사용하는 바이트 순서
+
+htonl(), htons(), ntohl(), ntohs() 는 '포트 번호'에 대해서 사용.
+inet_addr(), inet_ntoa() 는 '아이피 주소'에 대해서 사용.
+
+in_addr_t addr;
+struct hostent *hp;
+addr = inet_addr("218.237.65.4");
+hp = gethostbyaddr((char *)&addr, 4, AF_INET);
+
+int socket(int domain, int type, int protocol);
+	* domain: 소켓 종류
+		- AF_UNIX, AF_INET
+	* type: 통신방식
+		- SOCK_STREAM: TCP
+		- SOCK_DGRAM: UDP
+
+<Server>
+char buf[256];
+struct sockaddr_un ser, cli;
+int sd, nsd, len, clen;
+
+sd = socket(AF_UNIX, SOCK_STREAM, 0);
+
+memset((char *)&ser, '\0', sizeof(ser));
+ser.sun_family = AF_UNIX;
+strcpy(ser.sun_path, "hbsocket");
+len = sizeof(ser.sun_family) + strlen(ser.sun_path);
+
+bind(sd, (struct sockaddr *)&ser, len);
+listen(sd, 5);
+clen = sizeof(cli);
+nsd = accept(sd, (struct sockaddr *)&cli, &clen);
+recv(nsd, buf, sizeof(buf), 0);
+printf("%s\n", buf);
+
+close(nsd);
+close(sd);
+
+<Client>
+int sd, len;
+char buf[256];
+struct sockaddr_un ser;
+
+sd = socket(AF_UNIX, SOCK_STREAM, 0);
+
+memset((char *)&ser, '\0', sizeof(ser));
+ser.sun_family = AF_UNIx;
+strcpy(ser.sun_path, "hbsocket");
+len = sizeof(ser.sun_family) + strlen(ser.sun_path);
+
+connect(sd, (struct sockaddr *)&ser, len)
+strcpy(buf, "Unix Domain Socket Test Message");
+send(sd, buf, sizeof(buf), 0)
+
+close(sd);
+
+<Server>
+char buf[256];
+struct sockaddr_in ser, cli;
+int sd, nsd, clen;
+
+sd = socket(AF_INET, SOCK_STREAM, 0);
+
+memset((char *)&ser, '\0', sizeof(ser));
+ser.sin_family = AF_INET;
+ser.sin_port = htons(9080);
+ser.sin_addr.s_addr = inet_addr("192.168.0.1");
+
+bind(sd, (struct sockaddr *)&ser, sizeof(ser));
+
+<Client>
+char buf[256];
+struct sockaddr_in ser;
+int sd;
+
+sd = socket(AF__INET, SOCK_STREAM, 0);
+
+memset((char *)&ser, '\0', sizeof(ser));
+ser.sin_family = AF_INET;
+ser.sin_port = htons(9080);
+ser.sin_addr.s_addr = inet_addr("192.168.0.1");
+
+connect(sd, (struct sockaddr *)&ser, sizeof(ser));
+
+반복서버
+	- 서버 프로세스가 직접 모든 클라이언트의 요청을 차례로 처리.
+	- 따라서 한 번에 한 클라이언트의 요청만을 처리.
+동시동작서버
+	- 서버 프로세스가 직접 서비스를 제공하지 않고, 서비스를 대신 처리할 프로세스를 fork 함수로 생성해 클라이언트와 연결.
+
+반복서버
+while (1) {
+	nsd = accept(sd, (struct sockaddr *)&cli, &clen);
+	
+	send(nsd, buf, sizeof(buf), 0);
+	recv(nsd, buf, sizeof(buf), 0);
+}
+
+동시동작서버
+while (1) {
+	nsd = accept(sd, (struct sockaddr *)&cli, &clen);
+	
+	switch (pid = fork()) {
+		case 0:
+			close(sd);
+			send(nsd, buf, sizeof(buf), 0);
+			recv(nsd, buf, sizeof(buf), 0);
+	}
+	close(nsd);
+}
+or 
+while (1) {
+	nsd = accpet(sd, (struct sockaddr *)&cli, &clen);
+	
+	switch (pid = fork()) {
+		case 0:
+			close(sd);
+			dup2(nsd, STDIN_FILENO);			// 입력 대신 client 로부터 recv 됨.
+			dup2(nsd, STDOUT_FILENO);		// 출력 대신 client 로 send 됨.
+			close(nsd);
+			execl("./han", "han", (char *)0);		// 이 프로그램에서의 출력이 send 됨.
+	}
+	close(nsd);
+}
+
+명령행 인자로 소켓 기술자 전달
+while (1) {
+	nsd = accept(sd, (struct sockaddr *)&cli, &clen);
+	
+	switch (pid = fork()) {
+		case 0:
+			close(sd);
+			sprintf(buf, "%d", nsd);
+			execlp("./bit", "bit", buf, (char *)0);
+			close(nsd);
+	}
+	close(nsd);
+}
+bit 파일
+int main(int argc, char *argv[]) {
+	char buf[256];
+	int len, nsd;
+	
+	nsd = atoi(argv[1]);
+
+	strcpy(buf, "Welcome to Server, from Bit");
+	send(nsd, buf, sizeof(buf), 0);
+
+	. . .
+
+	return 0;
+}
+
+UDP 프로그래밍
+<Server>
+char buf[256];
+struct sockaddr_in ser, cli;
+int sd, clen;
+
+sd = socket(AF_INET, SOCK_DGRAM, 0);
+
+memset((char *)&ser, '\0', sizeof(ser));
+ser.sin_family = AF_INET;
+ser.sin_port = htons(9080);
+ser.sin_addr.s_addr = inet_addr("192.168.0.1");
+
+bind(sd, (struct sockaddr *)&ser, sizeof(ser))
+
+while (1) {
+	clen = sizeof(cli);
+	recvfrom(sd, buf, sizeof(buf), 0, (struct sockaddr *)&cli, &clen);		// 이 때, 클라이언트의 정보를 얻음.
+	sendto(sd, buf, sizeof(buf), 0, (struct sockaddr *)&cli, sizeof(cli));		// 얻은 정보를 통해 전송.
+}
+
+<Client>
+char buf[256];
+struct sockaddr_in ser;
+int sd;
+
+sd = socket(AF_INET, SOCK_DGRAM, 0);
+
+memset((char *)&ser, '\0', sizeof(ser));
+ser.sin_family = AF_INET;
+ser.sin_port = htons(9080);
+ser.sin_addr.s_addr = inet_addr("192.168.0.1");
+
+sendto(sd, buf, sizeof(buf), 0, (struct sockaddr *)&ser, sizeof(ser));
+recvfrom(sd, buf, sizeof(buf), 0, NULL, NULL);			// NULL 을 쓰면 구분하지 않고 다 받음. sentto 했으므로, 서버로부터 받을 것이 뻔하기 때문에.
+
+반복적으로 보내고 받을 때는 memset(buf, '\0', sizeof(buf)); 를 send, recv 하기 전에 꼭 해주자.

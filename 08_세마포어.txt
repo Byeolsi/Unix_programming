@@ -1,0 +1,104 @@
+세마포어
+	- 프로세스 사이의 동기를 맞추는 기능 제공.
+	- 한 번에 한 프로세스만 작업을 수행하는 부분에 접근해 잠그거나, 다시 잠금을 해제하는 기능을 제공하는 정수형 변수.
+	- Critical Section 에 들어가기 전에 p 함수를 실행하여 잠금 수행. 처리를 마치면 v 함수를 실행하여 잠금 해제.
+
+int semget(key_t key, int nsems, int semflg);
+	* semflg:
+		- IPC_CREAT
+		- IPC_EXCL
+struct sem {
+	ushort_t	semval;		// 세마포어 값
+	pid_t	sempid;		// 세마포어 연산을 마지막으로 수행한 프로세스 PID
+	ushort_t	semncnt;		// 세마포어 값이 현재 값보다 증가하기를 기다리는 프로세스 수
+	ushort_t	semzcnt;		// 세마포어 값이 0이 되기를 기다리는 프로세스 수
+};
+int semctl(int semid, int semnum, int cmd, . . .);
+	* cmd
+		- IPC_RMID
+		- IPC_SET
+		- IPC_STAT
+		- GETVAL: 세마포어의 semval 값을 읽어온다.
+		- SETVAL: 세마포어의 semval 값을 arg.val로 설정한다.
+		- GETPID: 세마포어의 sempid 값을 읽어온다.
+		- GETNCNT, GETZCNT: 세마포어의 semncnt, semzcnt 값을 읽어온다.
+		- GETALL: 세마포어 집합에 있는 모든 세마포어의 semval 값을 arg.array에 저장.
+		- SETALL: 세마포어 집합에 있는 모든 세마포어의 semval 값을 arg.array의 값으로 설정.
+union semun {
+	int		val;
+	struct semid_ds	*buf;
+	ushort_t		*array;
+} arg;
+int semop(int semid, struct sembuf *sops, size_t nsops);
+	* struct sembuf의 sem_flg
+		- IPC_NOWAIT: 다른 프로세스가 이미 들어가 있다면, block 하지 않고 기다리지 않음. 즉시 리턴.
+		- SEM_UNDO: 지금까지 수행한 연산은 UNDO 함.
+struct sembuf {
+	ushort_t	sem_num;	// 몇 번째 세마포어인가
+	short	sem_op;		// p 나 v 함수를 암시. 음수 값인 경우, p 함수. 양수 값인 경우, v 함수.
+	short	sem_flg;		// 플래그.
+};
+
+sem_op가 음수: 세마포어 잠금 기능 수행.
+	- semval 값이 sem_op의 절댓값과 같거나 크면 semncnt 값은 감소하고 semval 값에서 sem_op의 절댓값을 뺀다.
+	- semval 값이 sem_op의 절대값보다 작고 sem_flg에 IPC_NOWAIT 가 설정되어 있으면 semop 함수는 즉시 리턴.
+	- semval 값이 sem_op 값보다 작은데 sem_flg에 IPC_NOWAIT 가 설정되어 있지 않으면 semop 함수는 semncnt 값을 증가시키고 다음 상황을 기다린다.
+sem_op가 양수: 세마포어 해제 기능 수행.
+	- 세마포어의 잠금을 해제하고 사용중이던 공유자원을 돌려준다. sem_op 값이 semval 값에 더해진다.
+sem_op가 0:
+	- semval 값이 0이면 semop 함수는 즉시 리턴.
+	- semval 값이 0이 아니면,
+		- sem_flg 에 IPC_NOWAIT 가 설정되어 있으면 semop 함수는 즉시 리턴.
+		- sem_flg 에 IPC_NOWAIT 가 설정되어 있지 않으면 semop 함수는 semzcnt 값을 증가시키고 semval 값이 0이 되기를 기다린다.
+
+// 가장 먼저 유니온 구조체 선언.
+union semun {
+	int val;
+	struct semid_ds *buf;
+	unsigned short *array;
+};
+int initsem(key_t semkey) {
+	union semun semunarg;
+	int semid;
+
+	semid = semget(semkey, 1, IPC_CREAT | IPC_EXCL | 0600);
+	semunarg.val = 1;
+	semctl(semid, 0, SETVAL, semunarg);
+
+	return semid;
+}
+int semlock(int semid) {
+	struct sembuf buf;
+	
+	buf.sem_num = 0;
+	buf.sem_op = -1;
+	buf.sem_flg = SEM_UNDO;
+	semop(semid, &buf, 1);
+
+	return 0;
+}
+int semunlock(int semid) {
+	struct sembuf buf;
+	
+	buf.sem_num = 0;
+	buf.sem_op = 1;
+	buf.sem_flg = SEM_UNDO;
+	semop(semid, &buf, 1)
+
+	return 0;
+}
+void semhandle() {
+	int semid;
+
+	semid = initsem(980);
+
+	semlock(semid);
+	. . .
+	semunlock(semid);
+}
+int main() {
+	int i;
+	for (i = 0; i < 3; i++)
+		if (fork == 0) semhandle();
+	return 0;
+}

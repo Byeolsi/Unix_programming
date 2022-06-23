@@ -1,0 +1,47 @@
+메시지 큐
+	- 파이프와 유사하나 파이프는 스트림 기반으로 동작하고 메시지 큐는 메시지 단위로 동작.
+	- 메시지의 최대 크기는 제한되어 있음.
+	- 수신 프로세스는 어떤 유형의 메시지를 받을 것인지 선택 가능.
+
+int msgget(key_t key, int msgflg);
+	* key: 980
+	* msgflg:
+		- IPC_CREAT: 새로운 키면 식별자를 새로 생성.
+		- IPC_EXCL: 이미 존재하는 키면 오류 발생.
+int msgsnd(int msqid, const void *msgp, size_t msgsz, int msgflg);
+int msgrcv(int msqid, void *msgp, size_t msgsz, int msgtyp, int msgflg);
+	* msgflg:
+		- 0: 블록 모드, 메시지 큐가 찬 경우 대기.
+		- IPC_NOWAIT: 비블록 모드, 대기 없이 바로 오류를 return.
+		- MSG_NOERROR: 메시지의 내용이 size 보다 길면 초과분을 잘라낸다.
+struct msqbuf {		// 구조체 이름은 마음대로.
+	long mtype;	// 구조체 내부의 변수의 이름은 무조건 이대로.
+	char mtext[80];	// 배열의 크기 마음대로.
+};
+
+<Client>
+struct msqbuf mymsg;
+key_t key;
+int msgid;
+// key = ftok("keyfile", 1);
+msgid = msgget(980, IPC_CREAT | 0644);
+mymsg.mtype = 1;
+strcpy(mymsg.mtext, "Message Q Test\n");
+msgsnd(msgid, (void *)&mymsg, 80, IPC_NOWAIT);
+
+<Server>
+struct msqbuf mymsg;
+key_t key;
+int msgid, len;
+// key = ftok("keyfile", 1);
+msgid = msgget(980, 0);
+len = msgrcv(msgid, &mymsg, 80, 0, 0);
+printf("%s", mymsg.mtext);
+
+int msgctl(int msqid, int cmd, struct msqid_ds &buf);
+	* cmd:
+		- IPC_RMID: 메시지 큐 제거.
+		- IPC_SET: 메시지 큐 정보 중 msg_perm.uid, msg_perm.gid, msg_perm.mode, msg_qbytes 를 세번째 인자(buf)로 지정한 값으로 변경.
+		- IPC_STAT: 현재 메시지 큐의 정보를 buf 에 저장.
+msgid = msgget(key, IPC_CREAT | 0644);
+msgctl(msgid, IPC_RMID, (struct msqid_ds *)NULL);

@@ -1,0 +1,115 @@
+파일 정보
+struct stat buf;
+int stat(const char *restrict path, struct stat *buf);
+stat("unix.txt", &buf);
+
+(전역변수)extern int errno;
+int access(const char *path, int amode);
+access("unix.bak", F_OK);
+	* 오류메시지
+		- ENOENT: 파일이 없음.
+		- EACCES: 접근권한이 없음.
+	* amode 값
+		- R_OK: 읽기 권한 확인
+		- W_OK: 쓰기 권한 확인
+		- X_OK: 실행 권한 확인
+		- F_OK: 파일이 존재하는지 확인.
+
+유효 사용자 식별번호(euid)
+	- 파일에 대해 실제 소유권을 갖는 사용자의 사용자 식별번호. 파일을 만든 사용자.
+진짜 사용자 식별번호(ruid)
+	- 실제로 프로세스를 갖는 사용자의 사용자 식별번호. 프로세스를 실행시킨 사용자.
+sticky bit
+	- 공유디렉토리(/tmp)에 대한 접근 권한.
+	- 텍스트-이미지를 swap 영역에 남겨둠.
+
+int mkdir(const char *path, mode_t mode);
+mkdir("han", 0755);
+
+DIR *dp;
+DIR *opendir(const char *dirname);
+dp = opendir("hanbit");
+int closedir(DIR *dirp);
+closedir(dp);
+
+struct dirent *dent;
+while(dent = readdir(dp)) {};
+
+struct utsname uts;
+int uname(struct ustname *name);
+uname(&uts);
+
+long pathconf(const char *path, int name);
+long fpathconf(int filedes, int name);
+pathconf(".", _PC_LINK_MAX);
+	* name 에 사용할 상수
+		- _PC_LINK_MAX(1)
+		- _PC_NAME_MAX(4)
+		- _PC_PATH_MAX(5)
+
+메모리에 적재된 프로세스의 구조
+	- 텍스트 영역: 실행 코드 저장.
+	- 데이터 영역: 전역 변수 저장.
+	- 힙 영역: 동적 메모리 할당을 위한 영역.
+	- 스택 영역: 지역 변수 저장.
+
+프로세스의 상태 및 전이
+	1) 프로세스는 먼저 사용자 모드에서 실행.
+	2) 사용자 모드에서 시스템 호출을 하면 커널 모드로 전환.
+	3) 커널 모드에서 실행 중 입출력을 기다릴 때처럼 실행을 계속할 수 없으면 수면상태로 전환.
+	4) 수면 중이던 프로세스가 깨어나 실행 대기 상태로 전환되면 실행 준비.
+
+(전역변수)extern char **environ;
+char **env;
+
+env = environ;
+while (*env) {
+	printf("%s\n", *env);
+	env++;
+}
+
+int main(int argc, char **argv, char **envp) {
+	char **env;
+
+	env = envp;
+	while (*env) {
+		printf("%s\n", *env);
+		env++;
+	}
+	return 0;
+}
+
+int ftw(const char *path, int(*func)(), int depth);
+	* path: 경로
+	* func: 함수
+	* depth: 일반적으로 1로 사용.
+int func(const char *name, const struct stat *sptr, int type);
+	* type 인자 종류
+		- FTW_F: 객체가 하나의 파일.
+		- FTW_D: 객체가 하나의 디렉토리.
+		- FTW_DNR: 객체가 읽을 수 없는 하나의 디렉토리.
+		- FTW_SL: 객체가 하나의 심볼형 링크.
+		- FTW_NS: 객체가 심볼형 링크가 아니며, 따라서 stat 루틴이 성공적으로 수행될 수 없는 객체.
+func 의 예시
+	int list(const char *name, const struct stat *status, int type)
+	{
+		if (type == FTW_NS) return 0;
+		if (type == FTW_F)
+			printf("%s, %o", name, status->st_mode & 0777);
+			. . .
+		else
+			printf("%s, %o", name, status->st_mode & 0777);
+			. . .
+		return 0;
+	}
+	int main() { ftw(".", list, 1); }
+
+#ifdef TIMES
+	start = dclock();
+#endif
+	시간 측정 부분
+#ifdef TIMES
+	end = dclock() - start;
+	printf(end);
+#endif
+	gcc -DTIMES -o sample sample.c

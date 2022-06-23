@@ -1,0 +1,785 @@
+struct stat buf;
+int stat(const char *restrict path, struct stat *buf);
+stat("unix.txt", &buf);
+
+(전역변수)extern int errno;
+int access(const char *path, int amode);
+access("unix.bak", F_OK);
+	* 오류메시지
+		- ENOENT: 파일이 없음.
+		- EACCES: 접근권한이 없음.
+	* amode 값
+		- R_OK: 읽기 권한 확인
+		- W_OK: 쓰기 권한 확인
+		- X_OK: 실행 권한 확인
+		- F_OK: 파일이 존재하는지 확인.
+
+int mkdir(const char *path, mode_t mode);
+mkdir("han", 0755);
+
+DIR *dp;
+DIR *opendir(const char *dirname);
+dp = opendir("hanbit");
+int closedir(DIR *dirp);
+closedir(dp);
+
+struct dirent *dent;
+while(dent = readdir(dp)) {};
+
+struct utsname uts;
+int uname(struct ustname *name);
+uname(&uts);
+
+long pathconf(const char *path, int name);
+long fpathconf(int filedes, int name);
+pathconf(".", PC_LINK_MAX);
+	* name 에 사용할 상수
+		- _PC_LINK_MAX(1)
+		- _PC_NAME_MAX(4)
+		- _PC_PATH_MAX(5)
+
+(전역변수)extern char **environ;
+char **env;
+
+env = environ;
+while (*env) {
+	printf("%s\n", *env);
+	env++;
+}
+
+int main(int argc, char **argv, char **envp) {
+	char **env;
+
+	env = envp;
+	while (*env) {
+		printf("%s\n", *env);
+		env++;
+	}
+	return 0;
+}
+
+int ftw(const char *path, int(*func)(), int depth);
+	* path: 경로
+	* func: 함수
+	* depth: 일반적으로 1로 사용.
+int func(const char *name, const struct stat *sptr, int type);
+	* type 인자 종류
+		- FTW_F: 객체가 하나의 파일.
+		- FTW_D: 객체가 하나의 디렉토리.
+		- FTW_DNR: 객체가 읽을 수 없는 하나의 디렉토리.
+		- FTW_SL: 객체가 하나의 심볼형 링크.
+		- FTW_NS: 객체가 심볼형 링크가 아니며, 따라서 stat 루틴이 성공적으로 수행될 수 없는 객체.
+func 의 예시
+	int list(const char *name, const struct stat *status, int type)
+	{
+		if (type == FTW_NS) return 0;
+		if (type == FTW_F)
+			. . .
+		else
+			. . .
+		return 0;
+	}
+	int main() { ftw(".", list, 1); }
+
+#ifdef TIMES
+	start = dclock();
+#endif
+	시간 측정 부분
+#ifdef TIMES
+	end = dclock() - start;
+	printf(end);
+#endif
+	gcc -DTIMES -o sample sample.c
+
+void (*signal(int sig, void (*disp)(int)))(int);
+	* disp: sig 로 지정한 시그널을 받았을 때 처리할 방법
+		- 시그널 핸들러 함수명.
+		- SIG_IGN: 시그널을 무시하도록 지정.
+		- SIG_DFL: 기본 처리 방법으로 처리하도록 지정.
+void handler(int signo) { . . . }
+void (*hand)(int);
+hand = signal(SIGINT, handler);
+if (hand == SIG_ERR) { perror("signal"); exit(1); }
+
+void handler(int signo) { . . . }
+void (*sigset(int sig, void (*disp)(int)))(int);
+sigset(SIGINT, handler);
+
+sigset_t st;
+int sigemptyset(sigset_t *set);
+int sigaddset(sigset_t *set, int signo);
+sigemptyset(&st);
+sigaddset(&st, SIGINT);
+
+struct sigaction act;
+	* sa_flags: 시그널 전달 방법을 수정할 플래그.
+		- SA_SIGINFO
+		- SA_SIGINFO가 설정되어 있지 않으면 sa_handler 에 시그널 처리동작 지정.
+		- SA_SIGINFO가 설정되어 있으면 sa_sigaction 멤버 사용.
+	* sa_flags 에 지정할 수 있는 값
+		- SA_RESETHAND: 시그널 핸들러가 한 번 호출된 후에 시그널 처리 방법이 기본처리 방법으로 재설정.
+		- SA_SIGINFO
+	* sa_mask: 시그널 핸들러가 수행되는 동안 블록될 시그널을 지정한 시그널 집합.
+
+int sigaction(int sig, const struct sigaction *restrict act, struct sigaction *restrict oact);
+struct sigaction act;
+sigemptyset(&act.sa_mask);
+sigaddset(&act.sa_mask, SIGQUIT);
+act.sa_flags = 0;
+act.sa_handler = handler;
+sigaction(SIGINT, &act, (struct sigaction *)NULL)
+
+void handler(int signo, siginfo_t *sf, ucontext_t *uc)
+{
+	psiginfo(sf, "Received Signal: ");
+}
+act.sa_flags = SA_SIGINFO;
+act.sa_sigaction = (void (*)(int, siginfo_t *, void *))handler;
+sigemptyset(&act.sa_mask);
+sigaction(SIGUSR1, &act, (struct sigaction *)NULL)
+
+getitimer(int which, struct itimerval *value);
+setitimer(int which, const struct itimerval *value, struct itimerval *ovalue);
+	* 타이머의 종류
+		- ITIMER_REAL: 실제 시간 사용. SIGALRM 시그널 발생.
+		- ITIMER_VIRTUAL: 프로세스의 가상 시간 사용. SIGVTALRM 시그널 발생.
+		- ITIMER_PROF: 실행중인 시간과 프로세스의 가상 시간을 모두 사용. SIGPROF 시그널 발생.
+		- ITIMER_REALPROF: 실제 시간 사용. 멀티스레드 프로그램의 실제 실행시간 측정 시 사용. SIGPROF 시그널 발생.
+
+struct itimerval it;
+sigset(SIGALRM, handler);
+it.it_value.tv_sec = 3;
+it.it_value.tv_usec = 0;
+it.it_interval.tv_sec = 2;
+it.it_interval.tv_usec = 0;
+getitimer(ITIMER_REAL, &it);
+setitimer(ITIMER_REAL, &it, (struct itimerval *)NULL);
+
+sigprocmask(int how, const sigset_t *restrict set, sigset_t *restrict oset);
+	* how 타입
+		- SIG_BLOCK: set 에 지정한 시그널 집합을 시그널 마스크에 추가.
+		- SIG_UNBLOCK: set 에 지정한 시그널 집합을 시그널 마스크에서 제거.
+		- SIG_SETMASK: set 에 지정한 시그널 집합으로 현재 시그널 마스크 대체.
+sigset_t new;
+sigemptyset(&new);
+sigaddset(&new, SIGINT);
+sigaddset(&new, SIGQUIT);
+sigprocmask(SIG_BLOCK, &new, (sigset_t *)NULL);
+sigprocmaks(SIG_UNBLOCK, &new, (sigset_t *)NULL);
+// malloc 하면 free 해주는 것처럼, 블록하고 언블록해줘야 함.
+
+void *mmap(void *addr, size_t len, int prot, int flags, int fildes, off_t off);
+	* prot: 보호모드
+		- PROT_READ
+		- PROT_WRITE
+		- PROT_EXEC
+		- PROT_NONE
+	* flags: 매핑된 데이터를 처리하기 위한 정보 저장
+		- MAP_SHARED
+		- MAP_PRIVATE
+caddr_t addr;
+struct stat statbuf;
+stat(argv[1], &statbuf);
+fd = open(argv[1], O_RDWR);
+addr = mmap(NULL, statbuf.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, (off_t)0);
+printf("%s", addr);
+munmap(addr, statbuf.st_size);
+
+int fd, pagesize, length;
+pagesize = sysconf(_SC_PAGESIZE);
+length = 1 * pagesize;
+fd = open("m.dat", O_RDWR | O_CREAT | O_TRUNC, 0666);
+ftruncate(fd, (off_t)length);
+addr = mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, (off_t)0);
+close(fd);
+strcpy(addr, "Ftruncate Test\n");
+
+int msync(void *addr, size_t len, int flags);
+	* flags: 함수의 동작 지시
+		- MS_ASYNC: 비동기 쓰기 작업.
+		- MS_SYNC: 쓰기 작업을 완료할 때까지 msync 함수는 리턴 안함.
+		- MS_INVALIDATE: 메모리에 복사되어 있는 내용을 무효화.
+msync(addr, statbuf.st_size, MS_SYNC);
+
+int pipe(int fildes[2]);
+int p[2];
+pid_t pid;
+char buf[257];
+pipe(p);
+switch (pid = fork()) {
+	case 0:
+		close(p[0]);
+		write(p[1], buf, 256);
+		break;
+	default:
+		close(p[1]);
+		read(p[0], "Test Message\n", 14);
+		wait(NULL); / waitpid(pid, &status, 0);
+
+쓰기전용 파일기술자를 닫았을 때:
+	- 자료를 쓰기 위해 해당 파이프를 개방한 다른 프로세스가 존재하면 OK
+	- 쓰기 프로세스가 더 이상 없으면, 자료를 읽으려는 프로세스를 깨우고 0를 복귀. 파일의 끝에 도달한 것 같은 효과를 발생.
+읽기전용 파일기술자를 닫았을 때:
+	- 자료를 읽기 위해 해당 파이프를 개방한 다른 프로세스가 존재하면 OK
+	- 없으면 쓰기를 기다리는 모든 프로세스는 커널로부터 SIGPIPE 시그널을 받고 -1로 복귀. 오류발생.
+
+int status;
+pid_t pid;
+while (wait(&status) != pid)
+	continue
+printf("Status: %d, %x\n", status, status);
+printf("Child process Exit Status: %d\n", status >. 8);	// 오른쪽으로 8비트 이동해야 종료 상태 값을 알 수 있음.
+
+pid_t waitpid(pid_t pid, int *stat_loc, int options);
+	* options: waitpid 함수의 리턴 조건
+		- 0: Normal.
+		- WCONTINUED: 수행중인 자식 프로세스의 상태값 리턴.
+		- WNOHANG: 상태값을 즉시 리턴받을 수 없어도 이를 호출한 프로세스의 실행을 블록하지 않고 다른 작업을 수행하도록 함. (비동기적)
+		- WNOWAIT: 상태값을 리턴한 프로세스가 대기 상태에 머물 수 있도록 함.
+		- WUNTRACED: 종료되거나 실행을 중단한 자식 프로세스의 상태값을 리턴.
+int status;
+pid_t pid;
+switch (pid = fork()) {
+	case 0:
+		. . .
+	default:
+		while (waitpid(pid, &status, WNOHANG) == 0) { . . . }
+
+fcntl(pfd[0], F_SETFL, O_NONBLOCK);
+switch (nread = read(p[0], buf, MSGSIZE)) {
+	case -1:
+		if (errno == EAGAIN) {
+			printf("(pipe empty)\n");
+			sleep(1);
+			break;
+		}
+	case 0:
+		printf("End of coversation\n");
+		exit(0);
+	default:
+		printf("MSG = %s\n", buf);
+}
+	- 읽은 것이 없으면, 읽은 것이 생길 때까지 block 상태로 대기하는 것이 아니라 바로 에러를 리턴.
+
+int select (int nfds, fd_set *readfs, fd_set *writefs, fd_set *errorfs, struct timeval *timeout);
+void FD_ZERO(fd_set *fdset);	: fdset 가 가리키는 마스크를 초기화.
+void FD_SET(int fd, fd_set *fdset);	: fdset 가 가리키는 마스크 내의 비트, fd 를 1로 설정.
+void FD_ISSET(int fd, fd_set *fdset);	: fdset 가 가리키는 마스크 내의 비트, fd 가 설정되어 있는가?
+void FD_CLR(int fd, fd_set *fdset);	: fdset 가 가리키는 마스크 내의 비트, fd 를 0으로 설정.
+
+int fd1, fd2;
+fd_set readset;
+fd1 = open("file1", O_RDONLY);
+fd2 = open("file2", O_RDONLY);
+FD_ZERO(&readset);
+FD_SET(fd1, &readset);	FD_SET(fd2, &readset);
+switch (select(5, &readset, NULL, NULL, NULL)) { . . . }
+
+<parent>
+fd_set set, master;
+for (i = 0; i < 2; i++) close(p[i][1]);
+FD_ZERO(&master);
+FD_SET(0, &master);
+for (i = 0 ; i < 2; i++) FD_SET(p[i][0], &master);
+while (set = master, select(p[2][0]+1, &set, NULL, NULL, NULL) > 0) {
+	if (FD_ISSET(0, &set)) {
+		printf("From standard input...");
+		read(0, &ch, 1);
+		printf("%c\n", ch);
+	}
+	for (i = 0; i < 3; i++) {
+		if (FD_ISSET(p[i][0], &set)) {
+			read(p[i][0], buf, MSGSIZE);
+			. . .
+		}
+	}
+}
+
+이름 없는 파이프와 이름 있는 파이프의 차이점
+	- 이름 없는 파이프는 부모-자식 프로세스간의 통신을 위해서 사용.
+	- 이름 있는 파이프는 부모-자식간이 아닌 독립적인 프로세스간의 통신을 위해서 사용.
+
+int mknod(const char *path, mode_t mode, dev_t dev);
+	* mode: 생성할 특수파일의 종류.
+		- S_IFIFO: FIFO 특수파일
+		- S_IFCHAR: 문자장치 특수파일
+		- S_IFDIR: 디렉토리
+		- S_IFBLK: 블록장치 특수파일
+		- S_IFREG: 일반파일
+int mkfifo(const char *path, mode_t mode);
+<Server>
+int pd;
+mknod("TEST_FIFO", S_IFIFO | 0666, 0); / mkfifo("TEST_FIFO", 0666);
+pd = open("TEST_FIFO", O_WRONLY);
+close(pd);
+<Client>
+int pd;
+char buf[80];
+pd = open("TEST_FIFO", O_RDONLY);
+while ((n = read(pd, buf, 80)) > 0)	write(1, buf, n);
+
+레코드 록킹(advisory locking)
+	- 읽기 록: 다른 프로세스들이 쓰기 록을 적용하지 못하게 함. 여러 프로세스들이 같은 구영게 동시에 읽기 록을 할 수 있음.
+	- 쓰기 록: 다른 프로세스들이 그 구역에 읽거나 쓰기 록을 할 수 없도록 함. 파일의 한 구역에는 한 순간에 하나의 쓰기 록만이 존재.
+int fcntl(int fildes, int cmd, struct flock *ldata);
+	* cmd:
+		- F_GETLK: ldata 를 통해 전달된 록 정보를 획득.
+		- F_SETLK: 파일에 록을 적용하고, 불가능하면 즉 -1로 돌아옴.
+		- F_SETLKW: 파일에 록을 적용하고, 이것이 만약 다른 프로세스가 소유하고 있으면 수면. (lock 이 풀릴 때까지 기다림.)
+	* struct flock:
+		- l_type:	F_RDLCK: 읽기 록 적용.
+			F_WRLCK: 쓰기 록 적용.
+			F_UNLCK: 록 제거.
+struct flock my_lock;
+my_lock.l_type = F_WRLCK;
+my_lock.l_whence = SEEK_CUR;
+my_lock.l_start = 0;
+my_lock.l_len = 512;
+fcntl(fd, F_SETLKW, &my_lock);
+if (fcntl(fd, F_SETLK, &my_lock) == -1) {
+	if (errno == EACCES || errno == EAGAIN) {
+		fcntl(fd, F_GETLK, &b_lock);
+		printf("record locked by %d\n", b_lock.l_pid);
+	}
+}
+
+메시지 큐
+	- 파이프와 유사하나 파이프는 스트림 기반으로 동작하고 메시지 큐는 메시지 단위로 동작.
+	- 메시지의 최대 크기는 제한되어 있음.
+	- 수신 프로세스는 어떤 유형의 메시지를 받을 것인지 선택 가능.
+
+int msgget(key_t key, int msgflg);
+	* key: 980
+	* msgflg:
+		- IPC_CREAT: 새로운 키면 식별자를 새로 생성.
+		- IPC_EXCL: 이미 존재하는 키면 오류 발생.
+int msgsnd(int msqid, const void *msgp, size_t msgsz, int msgflg);
+int msgrcv(int msqid, void *msgp, size_t msgsz, int msgtyp, int msgflg);
+	* msgflg:
+		- 0: 블록 모드, 메시지 큐가 찬 경우 대기.
+		- IPC_NOWAIT: 비블록 모드, 대기 없이 바로 오류를 return.
+		- MSG_NOERROR: 메시지의 내용이 size 보다 길면 초과분을 잘라낸다.
+struct msqbuf {		// 구조체 이름은 마음대로.
+	long mtype;	// 구조체 내부의 변수의 이름은 무조건 이대로.
+	char mtext[80];	// 배열의 크기 마음대로.
+};
+
+<Client>
+struct msqbuf mymsg;
+key_t key;
+int msgid;
+// key = ftok("keyfile", 1);
+msgid = msgget(980, IPC_CREAT | 0644);
+mymsg.mtype = 1;
+strcpy(mymsg.mtype, "Message Q Test\n");
+msgsnd(msgid, (void *)&mymsg, 80, IPC_NOWAIT);
+
+<Server>
+struct msqbuf mymsg;
+key_t key;
+int msgid, len;
+// key = ftok("keyfile", 1);
+msgid = msgget(980, 0);
+len = msgrcv(msgid, &mymsg, 80, 0, 0);
+printf("%s", mymsg.mtext);
+
+int msgctl(int msqid, int cmd, struct msqid_ds &buf);
+	* cmd:
+		- IPC_RMID: 메시지 큐 제거.
+		- IPC_SET: 메시지 큐 정보를 세번째 인자(buf)로 지정한 값으로 변경.
+		- IPC_STAT: 현재 메시지 큐의 정보를 buf 에 저장.
+msgid = msgget(key, IPC_CREAT | 0644);
+msgctl(msgid, IPC_RMID, (struct msqid_ds *)NULL);
+
+공유 메모리
+	- 같은 메모리 공간을 두 개 이상의 프로세스가 공유하는 것.
+
+int shmget(key_t key, size_t size, int shmflg);
+	* shmflg: 공유 메모리의 속성을 지정하는 플래그.
+		- IPC_CREAT
+		- IPC_EXCL
+void *shmat(int shmid, const void *shmaddr, int shmflg);
+	* shmflg: 공유 메모리에 대한 읽기/쓰기 권한
+		- 0: 읽기/쓰기 가능.
+		- SHM_RDONLY: 읽기 전용.
+int shmctl(int chmid, int cmd, struct shmid_ds *buf);
+	* cmd: 수행할 제어기능.
+		- IPC_RMID: 공유 메모리 제거.
+		- IPC_SET: 공유 메모리 정보를 세번째 인자(buf)로 지정한 값으로 변경.
+		- IPC_STAT: 현재 공유 메모리의 정보를 buf 에 저장.
+		- SHM_LOCK: 공유 메모리를 잠근다.
+		- SHM_UNLOCK: 공유 메모리의 잠금을 해제한다.
+
+<부모-자식 프로세스>
+char *shmaddr, *shmaddr2;
+int pid;
+// key = ftok(" . . . ", 1);
+shmid = shmget(IPC_PRIVATE, 20, IPC_CREAT | 0644);
+switch (pid = fork()) {
+	case 0:
+		shmaddr = (char *)shmat(shmid, (char *)NULL, 0);
+		for (i = 0; i < 10; i++) shmaddr[i] = 'a' + i;
+		shmdt((char *)shmaddr);
+		break;
+	default:
+		wait(0);
+		shmaddr2 = (char *)shmat(shmid, (char *)NULL, 0);
+		for (i = 0; i < 10; i++) printf("%c ", shmaddr2[i]);
+		shmdt((char *)shmaddr2);
+		shmctl(shmid, IPC_RMID, (struct *shmid_ds *)NULL);
+		break;
+}
+
+<Server>
+int shmid;
+void *shmaddr;
+char buf[1024];
+sigset_t mask;
+
+shmid = shmget(980, 1024, IPC_CREAT | 0644);
+
+sigfillset(&mask);
+sigdelset(&mask, SIGUSR1);
+sigset(SIGUSR1, handler);
+sigsuspend(&mask);
+
+shmaddr = shmat(shmid, NULL, 0);
+strcpy(buf, shmaddr);
+strcpy(shmaddr, "Have a nice day\n");
+shmdt(shmaddr);
+
+<Client>
+int shmid;
+void *shmaddr;
+char buf[1024];
+
+shmid = shmget(980, 1024, 0);
+shmaddr = shmat(shmid, NULL, 0);
+strcpy(shmaddr, "Hello, I'm talker\n");
+
+kill(atoi(argv[i]), SIGUSR1);
+strcpy(buf, shmaddr);
+printf("%s\n", buf);
+shmdt(shmaddr);
+shmctl(shmid, IPC_RMID, NULL);
+
+세마포어
+	- 프로세스 사이의 동기를 맞추는 기능 제공.
+	- 한 번에 한 프로세스만 작업을 수행하는 부분에 접근해 잠그거나, 다시 잠금을 해제하는 기능을 제공하는 정수형 변수.
+	- Critical Section 에 들어가기 전에 p 함수를 실행하여 잠금 수행. 처리를 마치면 v 함수를 실행하여 잠금 해제.
+
+int semget(key_t key, int nsems, int semflg);
+	* semflg:
+		- IPC_CREAT
+		- IPC_EXCL
+struct sem {
+	ushort_t	semval;		// 세마포어 값
+	pid_t	sempid;		// 세마포어 연산을 마지막으로 수행한 프로세스 PID
+	ushort_t	semncnt;		// 세마포어 값이 현재 값보다 증가하기를 기다리는 프로세스 수
+	ushort_t	semzcnt;		// 세마포어 값이 0이 되기를 기다리는 프로세스 수
+};
+int semctl(int semid, int semnum, int cmd, . . .);
+	* cmd
+		- IPC_RMID
+		- IPC_SET
+		- IPC_STAT
+		- GETVAL: 세마포어의 semval 값을 읽어온다.
+		- SETVAL: 세마포어의 semval 값을 arg.val로 설정한다.
+		- GETPID: 세마포어의 sempid 값을 읽어온다.
+		- GETNCNT, GETZCNT: 세마포어의 semncnt, semzcnt 값을 읽어온다.
+		- GETALL: 세마포어 집합에 있는 모든 세마포어의 semval 값을 arg.array에 저장.
+		- SETALL: 세마포어 집합에 있는 모든 세마포어의 semval 값을 arg.array의 값으로 설정.
+union semun {
+	int		val;
+	struct semid_ds	*buf;
+	ushort_t		*array;
+} arg;
+int semop(int semid, struct sembuf *sops, size_t nsops);
+	* struct sembuf의 sem_flg
+		- IPC_NOWAIT: 다른 프로세스가 이미 들어가 있다면, block 하지 않고 기다리지 않음. 즉시 리턴.
+		- SEM_UNDO: 지금까지 수행한 연산은 UNDO 함.
+struct sembuf {
+	ushort_t	sem_num;	// 몇 번째 세마포어인가
+	short	sem_op;		// p 나 v 함수를 암시. 음수 값인 경우, p 함수. 양수 값인 경우, v 함수.
+	short	sem_flg;		// 플래그.
+};
+
+sem_op가 음수: 세마포어 잠금 기능 수행.
+	- semval 값이 sem_op의 절댓값과 같거나 크면 semncnt 값은 감소하고 semval 값에서 sem_op의 절댓값을 뺀다.
+	- semval 값이 sem_op의 절대값보다 작고 sem_flg에 IPC_NOWAIT 가 설정되어 있으면 semop 함수는 즉시 리턴.
+	- semval 값이 sem_op 값보다 작은데 sem_flg에 IPC_NOWAIT 가 설정되어 있지 않으면 semop 함수는 semncnt 값을 증가시키고 다음 상황을 기다린다.
+sem_op가 양수: 세마포어 해제 기능 수행.
+	- 세마포어의 잠금을 해제하고 사용중이던 공유자원을 돌려준다. sem_op 값이 semval 값에 더해진다.
+sem_op가 0:
+	- semval 값이 0이면 semop 함수는 즉시 리턴.
+	- semval 값이 0이 아니면,
+		- sem_flg 에 IPC_NOWAIT 가 설정되어 있으면 semop 함수는 즉시 리턴.
+		- sem_flg 에 IPC_NOWAIT 가 설정되어 있지 않으면 semop 함수는 semzcnt 값을 증가시키고 semval 값이 0이 되기를 기다린다.
+
+// 가장 먼저 구조체 선언.
+union semun {
+	int val;
+	struct semid_ds *buf;
+	unsigned short *array;
+};
+int initsem(key_t semkey) {
+	union semun semunarg;
+	int semid;
+
+	semid = semget(semkey, 1, IPC_CREAT | IPC_EXCL | 0600);
+	semunarg.val = 1;
+	semctl(semid, 0, SETVAL, semunarg);
+
+	return semid;
+}
+int semlock(int semid) {
+	struct sembuf buf;
+	
+	buf.sem_num = 0;
+	buf.sem_op = -1;
+	buf.sem_flg = SEM_UNDO;
+	semop(semid, &buf, 1);
+
+	return 0;
+}
+int semunlock(int semid) {
+	struct sembuf buf;
+	
+	buf.sem_num = 0;
+	buf.sem_op = 1;
+	buf.sem_flg = SEM_UNDO;
+	semop(semid, &buf, 1)
+
+	return 0;
+}
+void semhandle() {
+	int semid;
+
+	semid = initsem(980);
+
+	semlock(semid);
+	. . .
+	semunlock(semid);
+}
+int main() {
+	int i;
+	for (i = 0; i < 3; i++)
+		if (fork == 0) semhandle();
+	return 0;
+}
+
+소켓
+
+TCP와 UDP
+TCP		UDP
+연결지향형	비연결형			// 사전 연결
+신뢰성 보장	신뢰성을 보장하지 않음.	// reliablilty
+흐름 제어 기능	흐름 제어 기능 없음.	// flow-control
+순서 보장	순서를 보장하지 않음.	// sequence
+
+struct hostent *gethostbyaddr(const char *addr, int len, int type);
+	* type:
+		- AF_UNIX: 호스트 내부 통신
+		- AF_INET: 인터네트워크 통신: UDP, TCP 등
+struct servent *getservbyport(int port, const char *proto);
+	* proto:
+		- tcp, udp, NULL
+struct servent *port;
+port = getservbyport(htons(21), "tcp");
+
+정수를 저장하는 방식: 빅엔디안, 리틀엔디안
+	- 빅엔디안: 메모리의 낮은 주소에 정수의 첫 바이트를 위치.
+	- 리틀엔디안: 메모리의 높은 주소에 정수의 첫 바이트를 위치.
+바이트 순서
+	- 호스트 바이트 순서(HBO): 시스템에서 사용하는 바이트 순서
+	- 네트워크 바이트 순서(NBO): 네트워크에서 사용하는 바이트 순서
+
+htonl(), htons(), ntohl(), ntohs() 는 '포트 번호'에 대해서 사용.
+inet_addr(), inet_ntoa() 는 '아이피 주소'에 대해서 사용.
+
+in_addr_t addr;
+struct hostent *hp;
+addr = inet_addr("218.237.65.4");
+hp = gethostbyaddr((char *)&addr, 4, AF_INET);
+
+int socket(int domain, int type, int protocol);
+	* domain: 소켓 종류
+		- AF_UNIX, AF_INET
+	* type: 통신방식
+		- SOCK_STREAM: TCP
+		- SOCK_DGRAM: UDP
+
+<Server>
+char buf[256];
+struct sockaddr_un ser, cli;
+int sd, nsd, len, clen;
+
+sd = socket(AF_UNIX, SOCK_STREAM, 0);
+
+memset((char *)&ser, '\0', sizeof(ser));
+ser.sun_family = AF_UNIX;
+strcpy(ser.sun_path, "hbsocket");
+len = sizeof(ser.sun_family) + strlen(ser.sun_path);
+
+bind(sd, (struct sockaddr *)&ser, len);
+listen(sd, 5);
+clen = sizeof(cli);
+nsd = accept(sd, (struct sockaddr *)&cli, &clen);
+recv(nsd, buf, sizeof(buf), 0);
+printf("%s\n", buf);
+
+close(nsd);
+close(sd);
+
+<Client>
+int sd, len;
+char buf[256];
+struct sockaddr_un ser;
+
+sd = socket(AF_UNIX, SOCK_STREAM, 0);
+
+memset((char *)&ser, '\0', sizeof(ser));
+ser.sun_family = AF_UNIx;
+strcpy(ser.sun_path, "hbsocket");
+len = sizeof(ser.sun_family) + strlen(ser.sun_path);
+
+connect(sd, (struct sockaddr *)&ser, len)
+strcpy(buf, "Unix Domain Socket Test Message");
+send(sd, buf, sizeof(buf), 0)
+
+close(sd);
+
+<Server>
+char buf[256];
+struct sockaddr_in ser, cli;
+int sd, nsd, clen;
+
+sd = socket(AF_INET, SOCK_STREAM, 0);
+
+memset((char *)&ser, '\0', sizeof(sin));
+ser.sin_family = AF_INET;
+ser.sin_port = htons(9080);
+ser.sin_addr.s_addr = inet_addr("192.168.0.1");
+
+bind(sd, (struct sockaddr *)&ser, sizeof(ser));
+
+<Client>
+char buf[256];
+struct sockaddr_in ser;
+int sd;
+
+sd = socket(AF__INET, SOCK_STREAM, 0);
+
+memset((char *)&ser, '\0', sizeof(ser));
+ser.sin_family = AF_INET;
+ser.sin_port = htons(9080);
+ser.sin_addr.s_addr = inet_addr("192.168.0.1");
+
+connect(sd, (struct sockaddr *)&ser, sizeof(ser));
+
+반복서버
+	- 서버 프로세스가 직접 모든 클라이언트의 요청을 차례로 처리.
+	- 따라서 한 번에 한 클라이언트의 요청만을 처리.
+동시동작서버
+	- 서버 프로세스가 직접 서비스를 제공하지 않고, 서비스를 대신 처리할 프로세스를 fork 함수로 생성해 클라이언트와 연결.
+
+반복서버
+while (1) {
+	nsd = accept(sd, (struct sockaddr *)&cli, &clen);
+	
+	send(nsd, buf, sizeof(buf), 0);
+	recv(nsd, buf, sizeof(buf), 0);
+}
+
+동시동작서버
+while (1) {
+	nsd = accept(sd, (struct sockaddr *)&cli, &clen);
+	
+	switch (pid = fork()) {
+		case 0:
+			close(sd);
+			send(sd, buf, sizeof(buf), 0);
+			recv(sd, buf, sizeof(buf), 0);
+	}
+	close(nsd);
+}
+or 
+while (1) {
+	nsd = accpet(sd, (struct sockaddr *)&cli, &clen);
+	
+	switch (pid = fork()) {
+		case 0:
+			close(sd);
+			dup2(nsd, STDIN_FILENO);			// 입력 대신 client 로부터 recv 됨.
+			dup2(nsd, STDOUT_FILENO);		// 출력 대신 client 로 send 됨.
+			close(nsd);
+			execl("./han", "han", (char *)0);		// 이 프로그램에서의 출력이 send 됨.
+	}
+	close(nsd);
+}
+
+명령행 인자로 소켓 기술자 전달
+while (1) {
+	nsd = accept(sd, (struct sockaddr *)&cli, &clen);
+	
+	switch (pid = fork()) {
+		case 0:
+			close(sd);
+			sprintf(buf, "%d", nsd);
+			execlp("./bit", "bit", buf, (char *)0);
+			close(nsd);
+	}
+	close(nsd);
+}
+bit 파일
+int main(int argc, char *argv[]) {
+	char buf[256];
+	int len, nsd;
+	
+	nsd = atoi(argv[1]);
+
+	strcpy(buf, "Welcome to Server, from Bit");
+	send(nsd, buf, sizeof(buf), 0);
+
+	. . .
+
+	return 0;
+}
+
+UDP 프로그래밍
+<Server>
+char buf[256];
+struct sockaddr_in ser, cli;
+int sd, clen;
+
+sd = socket(AF_INET, SOCK_DGRAM, 0);
+
+memset((char *)&ser, '\0', sizeof(ser));
+ser.sin_family = AF_INET;
+ser.sin_port = htons(9080);
+ser.sin_addr.s_addr = inet_addr("192.168.0.1");
+
+bind(sd, (struct sockaddr *)&ser, sizeof(ser))
+
+while (1) {
+	clen = sizeof(cli);
+	recvfrom(sd, buf, sizeof(buf), 0, (struct sockaddr *)&cli, &clen);		// 이 때, 클라이언트의 정보를 얻음.
+	sendto(sd, buf, sizeof(buf), 0, (struct sockaddr *)&cli, sizeof(cli));		// 얻은 정보를 통해 전송.
+}
+
+<Client>
+char buf[256];
+struct sockaddr_in ser;
+int sd;
+
+sd = socket(AF_INET, SOCK_DGRAM, 0);
+
+memset((char *)&ser, '\0', sizeof(ser));
+ser.sin_family = AF_INET;
+ser.sin_port = htons(9080);
+ser.sin_addr.s_addr = inet_addr("192.168.0.1");
+
+sendto(sd, buf, sizeof(buf), 0, (struct sockaddr *)&ser, sizeof(ser));
+recvfrom(sd, buf, sizeof(buf), 0, NULL, NULL);			// NULL 을 쓰면 구분하지 않고 다 받음. sentto 했으므로, 서버로부터 받을 것이 뻔하기 때문에.
+
+반복적으로 보내고 받을 때는 memset(buf, '\0', sizeof(buf)); 를 send, recv 하기 전에 꼭 해주자.

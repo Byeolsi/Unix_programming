@@ -1,0 +1,32 @@
+void *mmap(void *addr, size_t len, int prot, int flags, int fildes, off_t off);
+	* prot: 보호모드
+		- PROT_READ
+		- PROT_WRITE
+		- PROT_EXEC
+		- PROT_NONE
+	* flags: 매핑된 데이터를 처리하기 위한 정보 저장
+		- MAP_SHARED
+		- MAP_PRIVATE
+caddr_t addr;
+struct stat statbuf;
+stat(argv[1], &statbuf);
+fd = open(argv[1], O_RDWR);
+addr = mmap(NULL, statbuf.st_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, (off_t)0);
+printf("%s", addr);
+munmap(addr, statbuf.st_size);
+
+int fd, pagesize, length;
+pagesize = sysconf(_SC_PAGESIZE);
+length = 1 * pagesize;
+fd = open("m.dat", O_RDWR | O_CREAT | O_TRUNC, 0666);
+ftruncate(fd, (off_t)length);
+addr = mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, fd, (off_t)0);
+close(fd);
+strcpy(addr, "Ftruncate Test\n");
+
+int msync(void *addr, size_t len, int flags);
+	* flags: 함수의 동작 지시
+		- MS_ASYNC: 비동기 쓰기 작업.
+		- MS_SYNC: 쓰기 작업을 완료할 때까지 msync 함수는 리턴 안함.
+		- MS_INVALIDATE: 메모리에 복사되어 있는 내용을 무효화.
+msync(addr, statbuf.st_size, MS_SYNC);
